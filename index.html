@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Uni → Treno</title>
+<style>
+:root{color-scheme:light;--bg:#f5f6f8;--card:#fff;--text:#15171a;--muted:#6b7280;--line:#e5e7eb;--accent:#111827;--good:#166534}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button{font:inherit}.shell{max-width:1100px;margin:0 auto;padding:16px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}.brand{font-weight:800;font-size:20px}.sub{color:var(--muted);font-size:13px}.toolbar{display:flex;gap:8px;overflow:auto;padding-bottom:8px}.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:9px 13px;white-space:nowrap}.pill.active{background:var(--accent);color:#fff}.week{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;overflow-x:auto}.day{background:var(--card);border:1px solid var(--line);border-radius:16px;min-height:420px;padding:12px}.dayhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:9px;margin-bottom:10px}.dow{font-weight:800}.date{font-size:12px;color:var(--muted)}.lesson{padding:11px 10px;border-radius:12px;background:#f1f5f9;margin-bottom:8px}.lesson b{display:block;font-size:14px;line-height:1.25}.time{font-weight:800;margin-bottom:4px}.room{font-size:12px;color:var(--muted);margin-top:5px}.travel{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}.travel h4{font-size:12px;margin:0 0 7px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.train{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}.train:last-child{border-bottom:0}.train strong{font-size:15px}.note{margin-top:16px;padding:12px 14px;background:#fff;border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:13px;line-height:1.45}.error{padding:18px;background:#fff;border:1px solid #fecaca;border-radius:14px;color:#991b1b}.loading{padding:30px;text-align:center;color:var(--muted)}@media(max-width:700px){.shell{padding:12px}.top{align-items:flex-start}.week{grid-template-columns:repeat(7,82vw);gap:9px}.day{min-height:65vh}.brand{font-size:18px}.toolbar{margin:0 -12px;padding-left:12px;padding-right:12px}.note{font-size:12px}}
+
+.tt-wrap{overflow-x:auto}
+.tt{display:grid;grid-template-columns:44px repeat(7,minmax(104px,1fr));min-width:780px;font-size:12px}
+.tt-head{padding:6px 4px;text-align:center;text-transform:capitalize;border-bottom:1px solid rgba(128,128,128,.4)}
+.tt-col{position:relative;border-left:1px solid rgba(128,128,128,.25)}
+.tt-hours{border-left:0}
+.tt-hour{position:absolute;right:4px;transform:translateY(-50%);opacity:.6;font-size:10px}
+.tt-line{position:absolute;left:0;right:0;border-top:1px solid rgba(128,128,128,.2)}
+.tt-ev{position:absolute;left:2px;right:2px;border-radius:6px;padding:2px 5px;overflow:hidden;line-height:1.25}
+.tt-lesson{background:rgba(59,130,246,.85);color:#fff}
+.tt-train{background:rgba(34,197,94,.85);color:#fff;white-space:nowrap}
+.tt-extra{background:#f59e0b;color:#111;border-style:dashed}
+
+</style></head><body>
+<main class="shell">
+<header class="top"><div><div class="brand">Uni → Treno</div><div class="sub">Sapienza · Lido di Lavinio ↔ Roma Termini</div></div><button class="pill" id="today">Oggi</button></header>
+<div class="toolbar"><button class="pill" id="prev">← settimana</button><span class="pill active" id="range"></span><button class="pill" id="next">settimana →</button></div>
+<div class="toolbar" id="tabs" hidden></div>
+<div id="out"><div class="loading">Aggiorno lezioni e collegamenti…</div></div>
+<div class="note" id="note"></div>
+</main>
+<script>
+const PX=0.9, DAY=864e5;
+const $=id=>document.getElementById(id);
+const mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
+const endOf=(a,b)=>mins(b)<mins(a)?1440:mins(b);
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const monday=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x};
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const fmt=(d,o)=>new Intl.DateTimeFormat('it-IT',o).format(d);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let week=monday(new Date()), data=null, sel='', compare=false;
+
+const lab=t=>{const tr=t.provider.startsWith('Trenitalia');return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?'':' '+esc(t.provider))};
+
+function timetable(t){
+  const days=Array.from({length:7},(_,i)=>{const d=iso(addDays(week,i));return t.days.find(x=>x.date===d)||{date:d,lessons:[],outbound:[],inbound:[]}});
+  const all=[];
+  days.forEach(d=>{d.lessons.forEach(l=>all.push(mins(l.start),mins(l.end)));if(d.lessons.length){const o=d.outbound[0],i=d.inbound[0];if(o)all.push(mins(o.departure));if(i)all.push(endOf(i.departure,i.arrival))}});
+  const from=(all.length?Math.floor(Math.min(...all)/60):8)*60, to=(all.length?Math.ceil(Math.max(...all)/60):20)*60;
+  const hours=Array.from({length:(to-from)/60+1},(_,i)=>from/60+i);
+  const box=(a,b)=>`top:${(mins(a)-from)*PX}px;height:${Math.max((endOf(a,b)-mins(a))*PX,22)}px`;
+  const H=(to-from)*PX;
+  let h='<div class="tt-wrap"><div class="tt"><div class="tt-corner"></div>';
+  days.forEach(d=>{const dt=new Date(d.date+'T12:00:00');h+=`<div class="tt-head"><b>${fmt(dt,{weekday:'short'})}</b> ${dt.getDate()}/${dt.getMonth()+1}</div>`});
+  h+=`<div class="tt-col tt-hours" style="height:${H}px">`+hours.map(x=>`<div class="tt-hour" style="top:${(x*60-from)*PX}px">${String(x).padStart(2,'0')}:00</div>`).join('')+'</div>';
+  days.forEach(d=>{
+    h+=`<div class="tt-col" style="height:${H}px">`+hours.map(x=>`<div class="tt-line" style="top:${(x*60-from)*PX}px"></div>`).join('');
+    d.lessons.forEach(l=>{h+=`<div class="tt-ev tt-lesson${l.extra?' tt-extra':''}" style="${box(l.start,l.end)}"><b>${l.start}–${l.end}</b> ${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`});
+    if(d.lessons.length){[d.outbound[0],d.inbound[0]].forEach(x=>{if(x)h+=`<div class="tt-ev tt-train" style="${box(x.departure,x.arrival)}">${lab(x)}</div>`})}
+    h+='</div>';
+  });
+  return h+'</div></div>';
+}
+function render(){
+  $('range').textContent=fmt(week,{day:'numeric',month:'short'})+' – '+fmt(addDays(week,6),{day:'numeric',month:'short'});
+  if(!data)return;
+  const tabs=$('tabs');tabs.hidden=data.timetables.length<2;
+  tabs.innerHTML=data.timetables.map(t=>`<button class="pill${!compare&&sel===t.id?' active':''}" data-id="${esc(t.id)}">${esc(t.label)}</button>`).join('')+`<button class="pill${compare?' active':''}" data-cmp="1">Confronta</button>`;
+  const list=compare?data.timetables:data.timetables.filter(t=>t.id===sel);
+  $('out').innerHTML=list.map(t=>`<section>${compare?`<h3 class="sub">${esc(t.label)}</h3>`:''}${timetable(t)}</section>`).join('');
+}
+$('tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.cmp)compare=!compare;else{sel=b.dataset.id;compare=false}render()};
+$('today').onclick=()=>{week=monday(new Date());render()};
+$('prev').onclick=()=>{week=addDays(week,-7);render()};
+$('next').onclick=()=>{week=addDays(week,7);render()};
+fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Dati non ancora disponibili');return r.json()}).then(j=>{
+  data=j;sel=j.timetables[0].id;
+  $('note').textContent='Aggiornato: '+new Date(j.generatedAt).toLocaleString('it-IT')+'. Il calcolo del viaggio considera 20 minuti tra università e stazione. I treni mostrati sono suggerimenti: controlla sempre eventuali modifiche, ritardi o cancellazioni prima di partire.';
+  render();
+}).catch(e=>{$('out').innerHTML='<div class="error">'+esc(e.message||'Errore')+'</div>'});
+render();
+</script></body></html>
