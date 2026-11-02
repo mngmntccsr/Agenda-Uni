@@ -1,9 +1,0 @@
-node_modules
-.next
-.env
-.env.local
-playwright-report
-test-results
-*.log
-.DS_Store
-next-env.d.ts
