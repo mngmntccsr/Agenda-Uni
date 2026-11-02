@@ -1,6 +1,7 @@
 import * as cheerio from 'cheerio';
 import { Course,Timetable } from './config';
 import { Lesson } from './types';
+const hit=(c:Course,raw:string,nr:string)=>(!!c.code&&raw.includes(c.code))||nr.includes(c.name.toLowerCase())||(c.match||[]).some(m=>nr.includes(m));
 export function parseTimetableHtml(html:string,courses:Course[]):Lesson[]{
   const $=cheerio.load(html); const out:Lesson[]=[];
   $('table').each((_,tb)=>{
@@ -9,7 +10,7 @@ export function parseTimetableHtml(html:string,courses:Course[]):Lesson[]{
       const cells=$(tr).find('th,td').map((_,c)=>$(c).text().replace(/\s+/g,' ').trim()).get();
       if($(tr).find('th').length){roomIdx=cells.findIndex(c=>/aula/i.test(c));return}
       const row=cells.join(' | ');
-      const nr=row.toLowerCase().replace(/[’`]/g,"'");const course=courses.find(c=>row.includes(c.code)||nr.includes(c.name.toLowerCase())); if(!course)return;
+      const nr=row.toLowerCase().replace(/[’`]/g,"'");const course=courses.find(c=>hit(c,row,nr)); if(!course)return;
       const d=row.match(/(\d{2})\/(\d{2})\/(\d{4})/); const t=row.match(/(\d{1,2}[:.]\d{2})\s*[-–]\s*(\d{1,2}[:.]\d{2})/);
       if(!d||!t)return;
       const f=(x:string)=>x.replace('.',':').padStart(5,'0');
@@ -36,7 +37,7 @@ export function parseEvents(json:any,courses:Course[]):Lesson[]{
   const ev:any[]=[];collect(json,ev);const out:Lesson[]=[];
   for(const e of ev){
     const raw=JSON.stringify(e).replace(/&#0?39;|&apos;/g,"'").replace(/&amp;/g,'&');const nr=raw.toLowerCase().replace(/[’`]/g,"'");
-    const c=courses.find(c=>nr.includes(c.name.toLowerCase())||raw.includes(c.code));if(!c)continue;
+    const c=courses.find(c=>hit(c,raw,nr));if(!c)continue;
     const a=rome(e.start),b=rome(e.end);
     const room=e.room||e.aula||e.location||raw.match(/((?:Aula|Sala)[^"(\\,\[]{1,40})/)?.[1]?.trim();
     out.push({id:`${c.id}-${a.date}-${a.time}`,courseId:c.id,course:c.name,date:a.date,start:a.time,end:b.time,room:typeof room==='string'?room:undefined});
