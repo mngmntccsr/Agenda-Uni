@@ -13,7 +13,7 @@ export const TIMETABLES:Timetable[]=[
   ]},
   {id:'B',label:'B · Giurisprudenza Teramo',url:TERAMO,courses:[
     {id:'proc-civile',code:'',name:'Diritto processuale civile',match:['processuale civile']},
-    {id:'proc-penale',code:'',name:'Diritto processuale penale',match:['processuale penale']},
+    {id:'penale',code:'',name:'Diritto penale',match:['diritto penale']},
   ]},
 ];
 // C = unione automatica di tutti gli orari sopra (non ha una fonte propria).
