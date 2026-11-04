@@ -31,13 +31,14 @@ describe('Sapienza live timetable parser', () => {
   it('matches courses without a code by keyword and skips amministrativo', () => {
     const teramo: Course[] = [
       { id: 'proc-civile', code: '', name: 'Diritto processuale civile', match: ['processuale civile'] },
-      { id: 'proc-penale', code: '', name: 'Diritto processuale penale', match: ['processuale penale'] },
+      { id: 'penale', code: '', name: 'Diritto penale', match: ['diritto penale'] },
     ];
     const json = { events: [
       { start: '2026-10-05T09:00:00', end: '2026-10-05T11:00:00', title: 'DIRITTO PROCESSUALE CIVILE' },
-      { start: '2026-10-05T11:00:00', end: '2026-10-05T13:00:00', title: 'Diritto processuale penale' },
+      { dataInizio: '2026-10-05T11:00:00', dataFine: '2026-10-05T13:00:00', aule: [{ descrizione: 'Aula 5' }], nome: 'DIRITTO PENALE' },
       { start: '2026-10-05T14:00:00', end: '2026-10-05T16:00:00', title: 'Diritto processuale amministrativo' },
     ] };
-    expect(parseEvents(json, teramo).map((x) => x.courseId)).toEqual(['proc-civile', 'proc-penale']);
+    expect(parseEvents(json, teramo).map((x) => x.courseId)).toEqual(['proc-civile', 'penale']);
+    expect(parseEvents(json, teramo)[1].room).toBe('Aula 5');
   });
 });
