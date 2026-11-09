@@ -17,6 +17,12 @@
 a.pill{text-decoration:none;color:inherit;display:inline-block}a.pill.active{color:#fff}
 .tt-src-B{background:rgba(139,92,246,.88)}
 .lg{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
+.tt-train-B{background:rgba(20,184,166,.88)}
+.tt-head.today{background:rgba(239,68,68,.14);color:#b91c1c;font-weight:600;border-bottom:2px solid #ef4444}
+.tt-col.today{background:rgba(239,68,68,.05)}
+.tt-now{position:absolute;left:0;right:0;border-top:2px solid #ef4444;z-index:5;pointer-events:none}
+.tt-now::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#ef4444}
+.tt-now-lab{position:absolute;right:2px;transform:translateY(-50%);background:#ef4444;color:#fff;font-size:10px;padding:0 3px;border-radius:3px;z-index:5}
 .tt-extra{background:#f59e0b;color:#111;border-style:dashed}
 
 </style></head><body>
@@ -41,30 +47,39 @@ let week=monday(new Date()), data=null;
 const cur=()=>{const h=decodeURIComponent(location.hash.slice(1)).toUpperCase();return data.timetables.some(t=>t.id===h)?h:data.timetables[0].id};
 
 const lab=t=>{const tr=t.provider.startsWith('Trenitalia');return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?'':' '+esc(t.provider))};
-// affianca le lezioni che si sovrappongono (utile nel confronto C)
-function lanes(ls){const ends=[];const items=ls.slice().sort((a,b)=>mins(a.start)-mins(b.start)).map(l=>{let k=ends.findIndex(e=>e<=mins(l.start));if(k<0)k=ends.length;ends[k]=endOf(l.start,l.end);return {l,k}});return {items,n:Math.max(ends.length,1)}}
+const first=a=>{const s=new Set();return a.filter(x=>{const k=x.src||'';if(s.has(k))return false;s.add(k);return true})};
+// affianca gli elementi che si sovrappongono nello stesso giorno (lezioni e mezzi; utile nel confronto C)
+function lanes(items){const ends=[];const out=items.slice().sort((a,b)=>mins(a.s)-mins(b.s)).map(it=>{let k=ends.findIndex(e=>e<=mins(it.s));if(k<0)k=ends.length;ends[k]=endOf(it.s,it.e);return {it,k}});return {out,n:Math.max(ends.length,1)}}
 
 function timetable(t,showSrc){
+  const now=new Date(), today=iso(now), nowMin=now.getHours()*60+now.getMinutes();
   const days=Array.from({length:7},(_,i)=>{const d=iso(addDays(week,i));return t.days.find(x=>x.date===d)||{date:d,lessons:[],outbound:[],inbound:[]}});
   const all=[];
-  days.forEach(d=>{d.lessons.forEach(l=>all.push(mins(l.start),mins(l.end)));if(d.lessons.length){const o=d.outbound[0],i=d.inbound[0];if(o)all.push(mins(o.departure));if(i)all.push(endOf(i.departure,i.arrival))}});
+  days.forEach(d=>{d.lessons.forEach(l=>all.push(mins(l.start),mins(l.end)));first(d.outbound).forEach(o=>all.push(mins(o.departure)));first(d.inbound).forEach(i=>all.push(endOf(i.departure,i.arrival)))});
   const from=(all.length?Math.floor(Math.min(...all)/60):8)*60, to=(all.length?Math.ceil(Math.max(...all)/60):20)*60;
   const hours=Array.from({length:(to-from)/60+1},(_,i)=>from/60+i);
   const box=(a,b)=>`top:${(mins(a)-from)*PX}px;height:${Math.max((endOf(a,b)-mins(a))*PX,22)}px`;
-  const H=(to-from)*PX;
+  const H=(to-from)*PX, nowTop=(nowMin-from)*PX, showNow=nowMin>=from&&nowMin<=to, hasToday=days.some(d=>d.date===today);
+  const hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   let h='<div class="tt-wrap"><div class="tt"><div class="tt-corner"></div>';
-  days.forEach(d=>{const dt=new Date(d.date+'T12:00:00');h+=`<div class="tt-head"><b>${fmt(dt,{weekday:'short'})}</b> ${dt.getDate()}/${dt.getMonth()+1}</div>`});
-  h+=`<div class="tt-col tt-hours" style="height:${H}px">`+hours.map(x=>`<div class="tt-hour" style="top:${(x*60-from)*PX}px">${String(x).padStart(2,'0')}:00</div>`).join('')+'</div>';
+  days.forEach(d=>{const dt=new Date(d.date+'T12:00:00');h+=`<div class="tt-head${d.date===today?' today':''}"><b>${fmt(dt,{weekday:'short'})}</b> ${dt.getDate()}/${dt.getMonth()+1}</div>`});
+  h+=`<div class="tt-col tt-hours" style="height:${H}px">`+hours.map(x=>`<div class="tt-hour" style="top:${(x*60-from)*PX}px">${String(x).padStart(2,'0')}:00</div>`).join('')+(hasToday&&showNow?`<div class="tt-now-lab" style="top:${nowTop}px">${hhmm}</div>`:'')+'</div>';
   days.forEach(d=>{
-    h+=`<div class="tt-col" style="height:${H}px">`+hours.map(x=>`<div class="tt-line" style="top:${(x*60-from)*PX}px"></div>`).join('');
-    const {items,n}=lanes(d.lessons);
-    items.forEach(({l,k})=>{h+=`<div class="tt-ev tt-lesson${l.src==='B'?' tt-src-B':''}${l.extra?' tt-extra':''}" style="${box(l.start,l.end)};left:calc(${k}*100%/${n} + 2px);right:auto;width:calc(100%/${n} - 4px)"><b>${l.start}–${l.end}</b> ${showSrc&&l.src?esc(l.src)+' · ':''}${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`});
-    if(d.lessons.length){[d.outbound[0],d.inbound[0]].forEach(x=>{if(x)h+=`<div class="tt-ev tt-train" style="${box(x.departure,x.arrival)}">${lab(x)}</div>`})}
+    const isT=d.date===today;
+    h+=`<div class="tt-col${isT?' today':''}" style="height:${H}px">`+hours.map(x=>`<div class="tt-line" style="top:${(x*60-from)*PX}px"></div>`).join('');
+    const items=[...d.lessons.map(l=>({type:'l',s:l.start,e:l.end,l})),...first(d.outbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x})),...first(d.inbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x}))];
+    const {out,n}=lanes(items);
+    out.forEach(({it,k})=>{
+      const pos=`${box(it.s,it.e)};left:calc(${k}*100%/${n} + 2px);right:auto;width:calc(100%/${n} - 4px)`;
+      if(it.type==='l'){const l=it.l;h+=`<div class="tt-ev tt-lesson${l.src==='B'?' tt-src-B':''}${l.extra?' tt-extra':''}" style="${pos}"><b>${l.start}–${l.end}</b> ${showSrc&&l.src?esc(l.src)+' · ':''}${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`}
+      else{const x=it.x;h+=`<div class="tt-ev tt-train${x.src==='B'?' tt-train-B':''}" style="${pos}">${showSrc&&x.src?esc(x.src)+' · ':''}${lab(x)}</div>`}
+    });
+    if(isT&&showNow)h+=`<div class="tt-now" style="top:${nowTop}px"></div>`;
     h+='</div>';
   });
   return h+'</div></div>';
 }
-function render(){
+function render(keep){
   $('range').textContent=fmt(week,{day:'numeric',month:'short'})+' – '+fmt(addDays(week,6),{day:'numeric',month:'short'});
   if(!data)return;
   const id=cur(), t=data.timetables.find(x=>x.id===id);
@@ -73,12 +88,16 @@ function render(){
   if(t.error)h=`<div class="error">${esc(t.error)}</div>`;
   else{
     if(t.warning)h+=`<div class="note">${esc(t.warning)}</div>`;
-    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>A<span class="lg" style="background:rgba(139,92,246,.88)"></span>B<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>treni/bus</div>';
+    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>A<span class="lg" style="background:rgba(139,92,246,.88)"></span>B<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>mezzi A<span class="lg" style="background:rgba(20,184,166,.88)"></span>mezzi B</div>';
     h+=timetable(t,id==='C');
   }
+  const old=document.querySelector('.tt-wrap'),sl=keep&&old?old.scrollLeft:null;
   $('out').innerHTML=h;
+  const w=document.querySelector('.tt-wrap');
+  if(w){if(sl!==null)w.scrollLeft=sl;else{const th=w.querySelector('.tt-head.today');if(th)w.scrollLeft=Math.max(0,th.getBoundingClientRect().left-w.getBoundingClientRect().left+w.scrollLeft-48)}}
 }
-window.addEventListener('hashchange',render);
+window.addEventListener('hashchange',()=>render());
+setInterval(()=>render(true),60000);
 $('today').onclick=()=>{week=monday(new Date());render()};
 $('prev').onclick=()=>{week=addDays(week,-7);render()};
 $('next').onclick=()=>{week=addDays(week,7);render()};
