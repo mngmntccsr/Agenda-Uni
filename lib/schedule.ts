@@ -1,10 +1,9 @@
 import { Lesson,Train } from './types';
 import { CONFIG } from './config';
-const T=CONFIG.transferMinutes;
-export function selectOutbound(trains:Train[],l:Lesson){
+export function selectOutbound(trains:Train[],l:Lesson,T=CONFIG.transferMinutes){
   return trains.filter(t=>toMinutes(t.arrival)+T<=toMinutes(l.start)).sort((a,b)=>toMinutes(b.departure)-toMinutes(a.departure));
 }
-export function selectInbound(trains:Train[],l:Lesson){
+export function selectInbound(trains:Train[],l:Lesson,T=CONFIG.transferMinutes){
   return trains.filter(t=>toMinutes(t.departure)>=toMinutes(l.end)+T).sort((a,b)=>toMinutes(a.departure)-toMinutes(b.departure));
 }
 
