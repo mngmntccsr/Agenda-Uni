@@ -34,3 +34,9 @@ export function searchTrains(from:string):Train[]{
   const rows=from.toLowerCase().includes('termini')?FROM_TERMINI:TO_TERMINI;
   return rows.map(([departure,arrival])=>({id:`${departure}-${arrival}`,provider:'Trenitalia FL8',departure,arrival,direct:true}));
 }
+
+// Teramo, Linea 7 (servizio feriale, PDF trasportourbanoteramo.it). Corse ogni 30'.
+// Andata: FF.SS. partenza -> Universita' (+7'). Ritorno: Universita' (partenza) -> FF.SS. arrivo (+20', il bus prosegue il giro via Colleparco e Garibaldi).
+// Ultima corsa del ritorno 19:19 (la 19:49 non ha FF.SS. nel PDF). Corse "bis" gia' incluse perche' stesso orario.
+export const TE_BUS_TO_UNI:Train[]=mk('Linea 7',[['07:12','07:19'],['07:42','07:49'],['08:12','08:19'],['08:42','08:49'],['09:12','09:19'],['09:42','09:49'],['10:12','10:19'],['10:42','10:49'],['11:12','11:19'],['11:42','11:49'],['12:12','12:19'],['12:42','12:49'],['13:12','13:19'],['13:42','13:49'],['14:12','14:19'],['14:42','14:49'],['15:12','15:19'],['15:42','15:49'],['16:12','16:19'],['16:42','16:49'],['17:12','17:19'],['17:42','17:49'],['18:12','18:19'],['18:42','18:49'],['19:12','19:19'],['19:42','19:49']]);
+export const TE_BUS_FROM_UNI:Train[]=mk('Linea 7',[['07:19','07:39'],['07:49','08:09'],['08:19','08:39'],['08:49','09:09'],['09:19','09:39'],['09:49','10:09'],['10:19','10:39'],['10:49','11:09'],['11:19','11:39'],['11:49','12:09'],['12:19','12:39'],['12:49','13:09'],['13:19','13:39'],['13:49','14:09'],['14:19','14:39'],['14:49','15:09'],['15:19','15:39'],['15:49','16:09'],['16:19','16:39'],['16:49','17:09'],['17:19','17:39'],['17:49','18:09'],['18:19','18:39'],['18:49','19:09'],['19:19','19:39']]);
