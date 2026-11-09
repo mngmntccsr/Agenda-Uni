@@ -17,6 +17,7 @@
 a.pill{text-decoration:none;color:inherit;display:inline-block}a.pill.active{color:#fff}
 .tt-src-B{background:rgba(139,92,246,.88)}
 .lg{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
+.tt.wide{grid-template-columns:44px repeat(7,minmax(176px,1fr));min-width:1290px}
 .tt-train-B{background:rgba(20,184,166,.88)}
 .tt-head.today{background:rgba(239,68,68,.14);color:#b91c1c;font-weight:600;border-bottom:2px solid #ef4444}
 .tt-col.today{background:rgba(239,68,68,.05)}
@@ -61,19 +62,20 @@ function timetable(t,showSrc){
   const box=(a,b)=>`top:${(mins(a)-from)*PX}px;height:${Math.max((endOf(a,b)-mins(a))*PX,22)}px`;
   const H=(to-from)*PX, nowTop=(nowMin-from)*PX, showNow=nowMin>=from&&nowMin<=to, hasToday=days.some(d=>d.date===today);
   const hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  let h='<div class="tt-wrap"><div class="tt"><div class="tt-corner"></div>';
+  let h=`<div class="tt-wrap"><div class="tt${showSrc?' wide':''}"><div class="tt-corner"></div>`;
   days.forEach(d=>{const dt=new Date(d.date+'T12:00:00');h+=`<div class="tt-head${d.date===today?' today':''}"><b>${fmt(dt,{weekday:'short'})}</b> ${dt.getDate()}/${dt.getMonth()+1}</div>`});
   h+=`<div class="tt-col tt-hours" style="height:${H}px">`+hours.map(x=>`<div class="tt-hour" style="top:${(x*60-from)*PX}px">${String(x).padStart(2,'0')}:00</div>`).join('')+(hasToday&&showNow?`<div class="tt-now-lab" style="top:${nowTop}px">${hhmm}</div>`:'')+'</div>';
   days.forEach(d=>{
     const isT=d.date===today;
     h+=`<div class="tt-col${isT?' today':''}" style="height:${H}px">`+hours.map(x=>`<div class="tt-line" style="top:${(x*60-from)*PX}px"></div>`).join('');
-    const items=[...d.lessons.map(l=>({type:'l',s:l.start,e:l.end,l})),...first(d.outbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x})),...first(d.inbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x}))];
-    const {out,n}=lanes(items);
-    out.forEach(({it,k})=>{
-      const pos=`${box(it.s,it.e)};left:calc(${k}*100%/${n} + 2px);right:auto;width:calc(100%/${n} - 4px)`;
+    const items=[...d.lessons.map(l=>({type:'l',s:l.start,e:l.end,l,src:l.src})),...first(d.outbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x,src:x.src})),...first(d.inbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x,src:x.src}))];
+    // confronto C: A sempre a sinistra, B sempre a destra; gli extra generici (senza orario) a tutta larghezza, sotto agli altri
+    const groups=showSrc?[[items.filter(i=>!i.src),0,1],[items.filter(i=>i.src&&i.src!=='B'),0,.5],[items.filter(i=>i.src==='B'),.5,.5]]:[[items,0,1]];
+    groups.forEach(([gi,off,w])=>{const {out,n}=lanes(gi);out.forEach(({it,k})=>{
+      const pos=`${box(it.s,it.e)};left:calc(${(off+k*w/n)*100}% + 2px);right:auto;width:calc(${w/n*100}% - 4px)`;
       if(it.type==='l'){const l=it.l;h+=`<div class="tt-ev tt-lesson${l.src==='B'?' tt-src-B':''}${l.extra?' tt-extra':''}" style="${pos}"><b>${l.start}–${l.end}</b> ${showSrc&&l.src?esc(l.src)+' · ':''}${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`}
       else{const x=it.x;h+=`<div class="tt-ev tt-train${x.src==='B'?' tt-train-B':''}" style="${pos}">${showSrc&&x.src?esc(x.src)+' · ':''}${lab(x)}</div>`}
-    });
+    })});
     if(isT&&showNow)h+=`<div class="tt-now" style="top:${nowTop}px"></div>`;
     h+='</div>';
   });
@@ -88,7 +90,7 @@ function render(keep){
   if(t.error)h=`<div class="error">${esc(t.error)}</div>`;
   else{
     if(t.warning)h+=`<div class="note">${esc(t.warning)}</div>`;
-    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>A<span class="lg" style="background:rgba(139,92,246,.88)"></span>B<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>mezzi A<span class="lg" style="background:rgba(20,184,166,.88)"></span>mezzi B</div>';
+    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>A (sinistra)<span class="lg" style="background:rgba(139,92,246,.88)"></span>B (destra)<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>mezzi A<span class="lg" style="background:rgba(20,184,166,.88)"></span>mezzi B</div>';
     h+=timetable(t,id==='C');
   }
   const old=document.querySelector('.tt-wrap'),sl=keep&&old?old.scrollLeft:null;
