@@ -1,21 +1,42 @@
-export type Course={id:string;code:string;name:string;match?:string[]};
-export type Timetable={id:string;label:string;url:string;courses:Course[];transport?:boolean};
-const SAPIENZA=process.env.SAPIENZA_TIMETABLE_URL||'https://corsidilaurea.uniroma1.it/it/course/33443/attendance/timetable';
-const TERAMO=process.env.TERAMO_TIMETABLE_URL||'https://unite.prod.up.cineca.it/calendarioPubblico/linkCalendarioId=5fc3ba9e05bff70017af6730';
-
-export const CONFIG={transferMinutes:20,origin:'Lido di Lavinio',destination:'Roma Termini'};
-
-// transport:true = per questo orario si calcolano treni/bus (oggi solo A; B in arrivo con i suoi bus).
-// Fonti reali. `match` = parole chiave (minuscole) cercate nel titolo se non c'e' un codice insegnamento.
-export const TIMETABLES:Timetable[]=[
-  {id:'A',label:'A · Strategia e governance',url:SAPIENZA,transport:true,courses:[
-    {id:'valutazione',code:'10627660',name:"Valutazione d'azienda"},
-    {id:'gestione',code:'10628744',name:"Gestione economica e finanziaria dell'azienda"},
-  ]},
-  {id:'B',label:'B · Giurisprudenza Teramo',url:TERAMO,courses:[
-    {id:'proc-civile',code:'',name:'Diritto processuale civile',match:['processuale civile']},
-    {id:'penale',code:'',name:'Diritto penale',match:['diritto penale']},
-  ]},
+import { Train } from './types';
+const mk=(provider:string,rows:string[][]):Train[]=>rows.map(([departure,arrival])=>({id:`${provider}-${departure}-${arrival}`,provider,departure,arrival,direct:true}));
+// Tiburtina -> Lanciano (ritorno del giovedì). Arrivo < partenza = giorno dopo.
+export const BUS_FROM_TIBURTINA:Train[]=[
+...mk('Clickbus',[['07:15','10:20'],['09:50','12:55'],['12:45','15:40'],['14:15','17:10'],['16:00','19:05'],['17:25','22:20'],['19:00','22:00'],['20:40','23:35']]),
+...mk('Flixbus',[['13:00','16:30'],['18:30','22:00'],['23:14','02:25']]),
+...mk('Dicarlobus',[['08:15','11:00'],['10:00','12:48'],['21:00','23:40']]),
+...mk('Prontobus',[['07:00','10:20'],['10:45','14:00'],['23:25','02:40']]),
 ];
-// C = unione automatica di tutti gli orari sopra (non ha una fonte propria).
-export const VIEW_C={id:'C',label:'C · Confronto A + B'};
+// Lanciano -> Tiburtina (andata del lunedì): da aggiungere
+export const BUS_TO_TIBURTINA:Train[]=[];
+
+export const TO_TERMINI:[string,string][]=[
+['05:10','06:00'],['05:10','06:03'],['06:11','06:58'],['06:11','07:01'],['06:51','07:43'],['06:51','07:46'],
+['07:19','08:15'],['07:19','08:18'],['07:55','08:48'],['07:57','08:51'],['08:31','09:18'],['08:31','09:21'],
+['09:29','10:18'],['09:29','10:21'],['10:27','11:18'],['10:27','11:21'],['11:27','12:18'],['11:27','12:21'],
+['12:27','13:18'],['13:26','14:17'],['13:27','14:20'],['14:27','15:18'],['14:27','15:21'],
+['15:26','16:18'],['15:27','16:21'],['16:27','17:18'],['16:27','17:21'],['16:52','17:48'],['16:52','17:51'],
+['17:27','18:18'],['17:27','18:21'],['18:26','19:18'],['18:26','19:21'],['18:27','19:18'],['18:27','19:21'],
+['19:27','20:18'],['19:27','20:21'],['20:26','21:18'],['20:26','21:21'],['20:26','21:23'],
+['21:27','22:15'],['21:27','22:18'],['22:16','23:18'],['22:16','23:21'],
+];
+export const FROM_TERMINI:[string,string][]=[
+['05:06','05:55'],['05:42','06:30'],['05:42','06:32'],['06:40','07:37'],['06:40','07:39'],
+['07:42','08:39'],['08:12','09:04'],['08:12','09:10'],['09:42','10:35'],['10:42','11:35'],
+['11:42','12:32'],['11:42','12:35'],['12:42','13:35'],['13:42','14:32'],['13:42','14:35'],
+['14:12','15:02'],['14:42','15:34'],['14:42','15:35'],['15:42','16:35'],['16:42','17:34'],
+['16:42','17:35'],['17:42','18:35'],['18:12','19:02'],['18:42','19:33'],['18:42','19:35'],
+['19:12','20:02'],['19:42','20:34'],['19:42','20:35'],['20:42','21:32'],['20:42','21:35'],
+['21:42','22:27'],['21:47','22:33'],
+];
+
+export function searchTrains(from:string):Train[]{
+  const rows=from.toLowerCase().includes('termini')?FROM_TERMINI:TO_TERMINI;
+  return rows.map(([departure,arrival])=>({id:`${departure}-${arrival}`,provider:'Trenitalia FL8',departure,arrival,direct:true}));
+}
+
+// Teramo, Linea 7 (servizio feriale, PDF trasportourbanoteramo.it). Corse ogni 30'.
+// Andata: FF.SS. partenza -> Universita' (+7'). Ritorno: Universita' (partenza) -> FF.SS. arrivo (+20', il bus prosegue il giro via Colleparco e Garibaldi).
+// Ultima corsa del ritorno 19:19 (la 19:49 non ha FF.SS. nel PDF). Corse "bis" gia' incluse perche' stesso orario.
+export const TE_BUS_TO_UNI:Train[]=mk('Linea 7',[['07:12','07:19'],['07:42','07:49'],['08:12','08:19'],['08:42','08:49'],['09:12','09:19'],['09:42','09:49'],['10:12','10:19'],['10:42','10:49'],['11:12','11:19'],['11:42','11:49'],['12:12','12:19'],['12:42','12:49'],['13:12','13:19'],['13:42','13:49'],['14:12','14:19'],['14:42','14:49'],['15:12','15:19'],['15:42','15:49'],['16:12','16:19'],['16:42','16:49'],['17:12','17:19'],['17:42','17:49'],['18:12','18:19'],['18:42','18:49'],['19:12','19:19'],['19:42','19:49']]);
+export const TE_BUS_FROM_UNI:Train[]=mk('Linea 7',[['07:19','07:39'],['07:49','08:09'],['08:19','08:39'],['08:49','09:09'],['09:19','09:39'],['09:49','10:09'],['10:19','10:39'],['10:49','11:09'],['11:19','11:39'],['11:49','12:09'],['12:19','12:39'],['12:49','13:09'],['13:19','13:39'],['13:49','14:09'],['14:19','14:39'],['14:49','15:09'],['15:19','15:39'],['15:49','16:09'],['16:19','16:39'],['16:49','17:09'],['17:19','17:39'],['17:49','18:09'],['18:19','18:39'],['18:49','19:09'],['19:19','19:39']]);
