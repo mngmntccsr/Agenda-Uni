@@ -19,3 +19,8 @@ export const TIMETABLES:Timetable[]=[
 ];
 // C = unione automatica di tutti gli orari sopra (non ha una fonte propria).
 export const VIEW_C={id:'C',label:'C · Confronto A + B'};
+
+// Andata fissa di A, valida tutte le settimane (indipendente dall'orario delle lezioni):
+// martedi = treno da Padiglione 07:37 -> Termini 08:22; mercoledi = il treno successivo a quello del martedi
+// (prima partenza da CONFIG.origin dopo le 07:37).
+export const FIXED_OUTBOUND_A={station:'Padiglione',departure:'07:37',arrival:'08:22'};
