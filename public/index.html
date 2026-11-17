@@ -47,7 +47,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 let week=monday(new Date()), data=null;
 const cur=()=>{const h=decodeURIComponent(location.hash.slice(1)).toUpperCase();return data.timetables.some(t=>t.id===h)?h:data.timetables[0].id};
 
-const lab=t=>{const tr=t.provider.startsWith('Trenitalia');return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?'':' '+esc(t.provider))};
+const lab=t=>{const tr=t.provider.startsWith('Trenitalia');return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?(t.provider.includes('·')?' ('+esc(t.provider.split('·')[1].trim())+')':''):' '+esc(t.provider))};
 const first=a=>{const s=new Set();return a.filter(x=>{const k=x.src||'';if(s.has(k))return false;s.add(k);return true})};
 // affianca gli elementi che si sovrappongono nello stesso giorno (lezioni e mezzi; utile nel confronto C)
 function lanes(items){const ends=[];const out=items.slice().sort((a,b)=>mins(a.s)-mins(b.s)).map(it=>{let k=ends.findIndex(e=>e<=mins(it.s));if(k<0)k=ends.length;ends[k]=endOf(it.s,it.e);return {it,k}});return {out,n:Math.max(ends.length,1)}}
