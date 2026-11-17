@@ -13,12 +13,11 @@ const extraFor=(id:string):Lesson[]=>extras
 
 type Group={src:string;lessons:Lesson[];transport:boolean;margin:number};
 const grp=(t:Timetable,lessons:Lesson[]):Group=>({src:t.id,lessons,transport:!!t.transport,margin:t.transferMinutes??CONFIG.transferMinutes});
-// Andata fissa di A: martedi (dow 2) Padiglione 07:37; mercoledi (dow 3) il primo treno dopo quello del martedi.
+// Andata fissa di A (vedi FIXED_OUTBOUND_A in config.ts); null = calcolo automatico.
 function fixedOutbound(src:string,dow:number):Train[]|null{
-  if(src!=='A'||(dow!==2&&dow!==3))return null;
-  const F=FIXED_OUTBOUND_A;
-  if(dow===2)return [{id:`fl8-${F.station}-${F.departure}`,provider:`Trenitalia FL8 · ${F.station}`,departure:F.departure,arrival:F.arrival,direct:true}];
-  return searchTrains(CONFIG.origin).filter(t=>t.departure>F.departure).sort((a,b)=>a.departure.localeCompare(b.departure)).slice(0,1);
+  const F=FIXED_OUTBOUND_A[dow];
+  if(src!=='A'||!F)return null;
+  return [{id:`fl8-fisso-${F.departure}`,provider:F.station?`Trenitalia FL8 · ${F.station}`:'Trenitalia FL8',departure:F.departure,arrival:F.arrival,direct:true}];
 }
 // Mezzi per orario: B = bus linea 7 di Teramo tutti i giorni; A = treno FL8 (bus il lunedi e il giovedi).
 const routes=(src:string,dow:number)=>src==='B'
