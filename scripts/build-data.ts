@@ -19,13 +19,18 @@ function fixedOutbound(src:string,dow:number):Train[]|null{
   if(src!=='A'||!F)return null;
   return [{id:`fl8-fisso-${F.departure}`,provider:F.station?`Trenitalia FL8 · ${F.station}`:'Trenitalia FL8',departure:F.departure,arrival:F.arrival,direct:true}];
 }
-// Mezzi per orario: B = bus linea 7 di Teramo tutti i giorni; A = treno FL8 (bus il lunedi e il giovedi).
-const routes=(src:string,dow:number)=>src==='B'
+// Mezzi per orario: B = bus linea 7 di Teramo tutti i giorni; A = treno FL8, con il bus lungo (Tiburtina) al lunedi
+// all'andata e nell'ULTIMO giorno con eventi della settimana (lezioni o extra) al ritorno.
+const routes=(src:string,dow:number,isLastDay:boolean)=>src==='B'
   ?{go:TE_BUS_TO_UNI,back:TE_BUS_FROM_UNI}
-  :{go:dow===1?BUS_TO_TIBURTINA:searchTrains(CONFIG.origin),back:dow===4?BUS_FROM_TIBURTINA:searchTrains(CONFIG.destination)};
-// I mezzi si calcolano per ogni orario con transport:true, solo sulle sue lezioni, e restano etichettati con la sua sigla.
+  :{go:dow===1?BUS_TO_TIBURTINA:searchTrains(CONFIG.origin),back:isLastDay?BUS_FROM_TIBURTINA:searchTrains(CONFIG.destination)};
+// lunedi (YYYY-MM-DD) della settimana di una data
+const weekOf=(d:string)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()-((x.getUTCDay()+6)%7));return x.toISOString().slice(0,10)};
+// per ogni settimana, l'ultimo giorno in cui il gruppo ha un evento (extra compresi)
+const lastDays=(g:Group)=>{const m=new Map<string,string>();for(const l of g.lessons){const k=weekOf(l.date);if(!m.has(k)||l.date>m.get(k)!)m.set(k,l.date)}return m};
 function plan(all:Lesson[],groups:Group[]):DayPlan[]{
   const dates=[...new Set(all.map(l=>l.date))].sort();
+  const lasts=new Map(groups.map(g=>[g.src,lastDays(g)] as const));
   return dates.map(date=>{
     const dow=new Date(date+'T12:00:00').getDay();
     const lessons=all.filter(l=>l.date===date).sort((a,b)=>a.start.localeCompare(b.start));
@@ -35,7 +40,7 @@ function plan(all:Lesson[],groups:Group[]):DayPlan[]{
       const gl=g.lessons.filter(l=>l.date===date).sort((a,b)=>a.start.localeCompare(b.start));
       if(!gl.length)continue;
       const last=gl.reduce((a,b)=>b.end>a.end?b:a);
-      const r=routes(g.src,dow);
+      const r=routes(g.src,dow,lasts.get(g.src)!.get(weekOf(date))===date);
       outbound.push(...(fixedOutbound(g.src,dow)??selectOutbound(r.go,gl[0],g.margin)).map(t=>({...t,src:g.src})));
       inbound.push(...selectInbound(r.back,last,g.margin).map(t=>({...t,src:g.src})));
     }
