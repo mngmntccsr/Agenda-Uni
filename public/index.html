@@ -105,7 +105,7 @@ $('prev').onclick=()=>{week=addDays(week,-7);render()};
 $('next').onclick=()=>{week=addDays(week,7);render()};
 fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Dati non ancora disponibili');return r.json()}).then(j=>{
   data=j;
-  $('note').textContent='Aggiornato: '+new Date(j.generatedAt).toLocaleString('it-IT')+'. Il calcolo del viaggio considera 20 minuti tra università e stazione. I treni mostrati sono suggerimenti: controlla sempre eventuali modifiche, ritardi o cancellazioni prima di partire.';
+  $('note').textContent='Aggiornato: '+new Date(j.generatedAt).toLocaleString('it-IT')+'. ';
   render();
 }).catch(e=>{$('out').innerHTML='<div class="error">'+esc(e.message||'Errore')+'</div>'});
 render();
