@@ -2,7 +2,7 @@ import { mkdirSync,writeFileSync,readFileSync } from 'node:fs';
 import { fetchLessons } from '../lib/sapienza';
 import { searchTrains,BUS_FROM_TIBURTINA,BUS_TO_TIBURTINA,TE_BUS_TO_UNI,TE_BUS_FROM_UNI } from '../lib/transport';
 import { selectInbound,selectOutbound } from '../lib/schedule';
-import { CONFIG,TIMETABLES,VIEW_C,Timetable } from '../lib/config';
+import { CONFIG,FIXED_OUTBOUND_A,TIMETABLES,VIEW_C,Timetable } from '../lib/config';
 import { DayPlan,Extra,Lesson,TimetableData,Train } from '../lib/types';
 
 const extras:Extra[]=JSON.parse(readFileSync('data/extra.json','utf8'));
@@ -13,6 +13,13 @@ const extraFor=(id:string):Lesson[]=>extras
 
 type Group={src:string;lessons:Lesson[];transport:boolean;margin:number};
 const grp=(t:Timetable,lessons:Lesson[]):Group=>({src:t.id,lessons,transport:!!t.transport,margin:t.transferMinutes??CONFIG.transferMinutes});
+// Andata fissa di A: martedi (dow 2) Padiglione 07:37; mercoledi (dow 3) il primo treno dopo quello del martedi.
+function fixedOutbound(src:string,dow:number):Train[]|null{
+  if(src!=='A'||(dow!==2&&dow!==3))return null;
+  const F=FIXED_OUTBOUND_A;
+  if(dow===2)return [{id:`fl8-${F.station}-${F.departure}`,provider:`Trenitalia FL8 · ${F.station}`,departure:F.departure,arrival:F.arrival,direct:true}];
+  return searchTrains(CONFIG.origin).filter(t=>t.departure>F.departure).sort((a,b)=>a.departure.localeCompare(b.departure)).slice(0,1);
+}
 // Mezzi per orario: B = bus linea 7 di Teramo tutti i giorni; A = treno FL8 (bus il lunedi e il giovedi).
 const routes=(src:string,dow:number)=>src==='B'
   ?{go:TE_BUS_TO_UNI,back:TE_BUS_FROM_UNI}
@@ -30,7 +37,7 @@ function plan(all:Lesson[],groups:Group[]):DayPlan[]{
       if(!gl.length)continue;
       const last=gl.reduce((a,b)=>b.end>a.end?b:a);
       const r=routes(g.src,dow);
-      outbound.push(...selectOutbound(r.go,gl[0],g.margin).map(t=>({...t,src:g.src})));
+      outbound.push(...(fixedOutbound(g.src,dow)??selectOutbound(r.go,gl[0],g.margin)).map(t=>({...t,src:g.src})));
       inbound.push(...selectInbound(r.back,last,g.margin).map(t=>({...t,src:g.src})));
     }
     return {date,lessons,outbound,inbound};
