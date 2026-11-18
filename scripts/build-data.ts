@@ -11,6 +11,13 @@ const extraFor=(id:string):Lesson[]=>extras
   .filter(e=>id===VIEW_C.id||!e.timetable||e.timetable==='all'||e.timetable===id)
   .map(e=>({id:`extra-${e.date}-${e.start}`,courseId:'extra',course:e.title,date:e.date,start:e.start,end:e.end,room:e.room,extra:true,src:TIMETABLES.some(t=>t.id===e.timetable)?e.timetable:undefined}));
 
+// Se un extra/seminario si sovrappone a una lezione DELLO STESSO orario, si mostra solo l'extra (la lezione sparisce, anche dal calcolo dei mezzi).
+// Vale per orario: l'extra di A non nasconde le lezioni di B e viceversa; gli extra "all" agiscono su ciascun orario separatamente.
+const hideOverlapped=(ls:Lesson[]):Lesson[]=>{
+  const ex=ls.filter(l=>l.extra);
+  return ls.filter(l=>l.extra||!ex.some(e=>e.date===l.date&&e.start<l.end&&l.start<e.end));
+};
+
 type Group={src:string;lessons:Lesson[];transport:boolean;margin:number};
 const grp=(t:Timetable,lessons:Lesson[]):Group=>({src:t.id,lessons,transport:!!t.transport,margin:t.transferMinutes??CONFIG.transferMinutes});
 // Andata fissa di A (vedi FIXED_OUTBOUND_A in config.ts); null = calcolo automatico.
@@ -79,7 +86,7 @@ async function main(){
   for(const tt of TIMETABLES){
     try{
       const ls=(await fetchLessons(tt)).map(l=>({...l,src:tt.id}));
-      const mine=[...ls,...extraFor(tt.id)];
+      const mine=hideOverlapped([...ls,...extraFor(tt.id)]);
       base[tt.id]=mine;
       out.push({id:tt.id,label:tt.label,days:plan(mine,[grp(tt,mine)])});
     }catch(e){
