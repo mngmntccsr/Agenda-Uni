@@ -45,10 +45,10 @@ const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
 const fmt=(d,o)=>new Intl.DateTimeFormat('it-IT',o).format(d);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let week=monday(new Date()), data=null;
+const nameOf=id=>(data.timetables.find(t=>t.id===id)||{}).label||id;
 const cur=()=>{const h=decodeURIComponent(location.hash.slice(1)).toUpperCase();return data.timetables.some(t=>t.id===h)?h:data.timetables[0].id};
 
-const lab=t=>{const tr=t.provider.startsWith('Trenitalia');return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?(t.provider.includes('·')?' ('+esc(t.provider.split('·')[1].trim())+')':''):' '+esc(t.provider))};
-const first=a=>{const s=new Set();return a.filter(x=>{const k=x.src||'';if(s.has(k))return false;s.add(k);return true})};
+const lab=t=>{const tr=/^(Trenitalia|Treno)/.test(t.provider);return (tr?'🚆':'🚌')+' '+t.departure+'→'+t.arrival+(mins(t.arrival)<mins(t.departure)?'+1':'')+(tr?(t.provider.includes('·')?' ('+esc(t.provider.split('·')[1].trim())+')':''):' '+esc(t.provider))};
 // affianca gli elementi che si sovrappongono nello stesso giorno (lezioni e mezzi; utile nel confronto C)
 function lanes(items){const ends=[];const out=items.slice().sort((a,b)=>mins(a.s)-mins(b.s)).map(it=>{let k=ends.findIndex(e=>e<=mins(it.s));if(k<0)k=ends.length;ends[k]=endOf(it.s,it.e);return {it,k}});return {out,n:Math.max(ends.length,1)}}
 
@@ -56,7 +56,7 @@ function timetable(t,showSrc){
   const now=new Date(), today=iso(now), nowMin=now.getHours()*60+now.getMinutes();
   const days=Array.from({length:7},(_,i)=>{const d=iso(addDays(week,i));return t.days.find(x=>x.date===d)||{date:d,lessons:[],outbound:[],inbound:[]}});
   const all=[];
-  days.forEach(d=>{d.lessons.forEach(l=>all.push(mins(l.start),mins(l.end)));first(d.outbound).forEach(o=>all.push(mins(o.departure)));first(d.inbound).forEach(i=>all.push(endOf(i.departure,i.arrival)))});
+  days.forEach(d=>{d.lessons.forEach(l=>all.push(mins(l.start),mins(l.end)));[...d.outbound,...d.inbound,...(d.mid||[])].forEach(x=>all.push(mins(x.departure),endOf(x.departure,x.arrival)))});
   const from=(all.length?Math.floor(Math.min(...all)/60):8)*60, to=(all.length?Math.ceil(Math.max(...all)/60):20)*60;
   const hours=Array.from({length:(to-from)/60+1},(_,i)=>from/60+i);
   const box=(a,b)=>`top:${(mins(a)-from)*PX}px;height:${Math.max((endOf(a,b)-mins(a))*PX,22)}px`;
@@ -68,13 +68,13 @@ function timetable(t,showSrc){
   days.forEach(d=>{
     const isT=d.date===today;
     h+=`<div class="tt-col${isT?' today':''}" style="height:${H}px">`+hours.map(x=>`<div class="tt-line" style="top:${(x*60-from)*PX}px"></div>`).join('');
-    const items=[...d.lessons.map(l=>({type:'l',s:l.start,e:l.end,l,src:l.src})),...first(d.outbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x,src:x.src})),...first(d.inbound).map(x=>({type:'t',s:x.departure,e:x.arrival,x,src:x.src}))];
+    const items=[...d.lessons.map(l=>({type:'l',s:l.start,e:l.end,l,src:l.src})),...[...d.outbound,...d.inbound,...(d.mid||[])].map(x=>({type:'t',s:x.departure,e:x.arrival,x,src:x.src}))];
     // confronto C: A sempre a sinistra, B sempre a destra; gli extra generici (senza orario) a tutta larghezza, sotto agli altri
     const groups=showSrc?[[items.filter(i=>!i.src),0,1],[items.filter(i=>i.src&&i.src!=='B'),0,.5],[items.filter(i=>i.src==='B'),.5,.5]]:[[items,0,1]];
     groups.forEach(([gi,off,w])=>{const {out,n}=lanes(gi);out.forEach(({it,k})=>{
       const pos=`${box(it.s,it.e)};left:calc(${(off+k*w/n)*100}% + 2px);right:auto;width:calc(${w/n*100}% - 4px)`;
-      if(it.type==='l'){const l=it.l;h+=`<div class="tt-ev tt-lesson${l.src==='B'?' tt-src-B':''}${l.extra?' tt-extra':''}" style="${pos}"><b>${l.start}–${l.end}</b> ${showSrc&&l.src?esc(l.src)+' · ':''}${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`}
-      else{const x=it.x;h+=`<div class="tt-ev tt-train${x.src==='B'?' tt-train-B':''}" style="${pos}">${showSrc&&x.src?esc(x.src)+' · ':''}${lab(x)}</div>`}
+      if(it.type==='l'){const l=it.l;h+=`<div class="tt-ev tt-lesson${l.src==='B'?' tt-src-B':''}${l.extra?' tt-extra':''}" style="${pos}"><b>${l.start}–${l.end}</b> ${esc(l.course)}${l.room?' · '+esc(l.room):''}</div>`}
+      else{const x=it.x;h+=`<div class="tt-ev tt-train${x.src==='B'?' tt-train-B':''}" style="${pos}">${lab(x)}</div>`}
     })});
     if(isT&&showNow)h+=`<div class="tt-now" style="top:${nowTop}px"></div>`;
     h+='</div>';
@@ -90,7 +90,7 @@ function render(keep){
   if(t.error)h=`<div class="error">${esc(t.error)}</div>`;
   else{
     if(t.warning)h+=`<div class="note">${esc(t.warning)}</div>`;
-    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>A (sinistra)<span class="lg" style="background:rgba(139,92,246,.88)"></span>B (destra)<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>mezzi A<span class="lg" style="background:rgba(20,184,166,.88)"></span>mezzi B</div>';
+    if(id==='C')h+='<div class="sub" style="margin:8px 0"><span class="lg" style="background:rgba(59,130,246,.85);margin-left:0"></span>'+esc(nameOf('A'))+' (sinistra)<span class="lg" style="background:rgba(139,92,246,.88)"></span>'+esc(nameOf('B'))+' (destra)<span class="lg" style="background:#f59e0b"></span>extra<span class="lg" style="background:rgba(34,197,94,.85)"></span>mezzi sinistra<span class="lg" style="background:rgba(20,184,166,.88)"></span>mezzi destra</div>';
     h+=timetable(t,id==='C');
   }
   const old=document.querySelector('.tt-wrap'),sl=keep&&old?old.scrollLeft:null;
@@ -105,7 +105,7 @@ $('prev').onclick=()=>{week=addDays(week,-7);render()};
 $('next').onclick=()=>{week=addDays(week,7);render()};
 fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('Dati non ancora disponibili');return r.json()}).then(j=>{
   data=j;
-  $('note').textContent='Aggiornato: '+new Date(j.generatedAt).toLocaleString('it-IT')+'. ';
+  $('note').textContent='Aggiornato: '+new Date(j.generatedAt).toLocaleString('it-IT')+'. Il calcolo del viaggio considera 20 minuti tra università e stazione. I treni mostrati sono suggerimenti: controlla sempre eventuali modifiche, ritardi o cancellazioni prima di partire.';
   render();
 }).catch(e=>{$('out').innerHTML='<div class="error">'+esc(e.message||'Errore')+'</div>'});
 render();
