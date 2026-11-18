@@ -1,8 +1,8 @@
 import { mkdirSync,writeFileSync,readFileSync } from 'node:fs';
 import { fetchLessons } from '../lib/sapienza';
-import { searchTrains,BUS_FROM_TIBURTINA,BUS_TO_TIBURTINA,TE_BUS_TO_UNI,TE_BUS_FROM_UNI } from '../lib/transport';
-import { selectInbound,selectOutbound } from '../lib/schedule';
-import { CONFIG,FIXED_OUTBOUND_A,TIMETABLES,VIEW_C,Timetable } from '../lib/config';
+import { searchTrains,BUS_FROM_TIBURTINA,BUS_TO_TIBURTINA,TE_BUS_TO_UNI,TE_BUS_FROM_UNI,LAN_TE_WEEK,LAN_TE_SUN,TE_LAN_WEEK } from '../lib/transport';
+import { selectInbound,selectOutbound,toMinutes } from '../lib/schedule';
+import { B_CONNECT_MINUTES,CONFIG,FIXED_OUTBOUND_A,TIMETABLES,VIEW_C,Timetable } from '../lib/config';
 import { DayPlan,Extra,Lesson,TimetableData,Train } from '../lib/types';
 
 const extras:Extra[]=JSON.parse(readFileSync('data/extra.json','utf8'));
@@ -19,32 +19,59 @@ function fixedOutbound(src:string,dow:number):Train[]|null{
   if(src!=='A'||!F)return null;
   return [{id:`fl8-fisso-${F.departure}`,provider:F.station?`Trenitalia FL8 · ${F.station}`:'Trenitalia FL8',departure:F.departure,arrival:F.arrival,direct:true}];
 }
-// Mezzi per orario: B = bus linea 7 di Teramo tutti i giorni; A = treno FL8, con il bus lungo (Tiburtina) al lunedi
+// Mezzi di A: treno FL8, con il bus lungo (Tiburtina) al lunedi
 // all'andata e nell'ULTIMO giorno con eventi della settimana (lezioni o extra) al ritorno.
-const routes=(src:string,dow:number,isLastDay:boolean)=>src==='B'
-  ?{go:TE_BUS_TO_UNI,back:TE_BUS_FROM_UNI}
-  :{go:dow===1?BUS_TO_TIBURTINA:searchTrains(CONFIG.origin),back:isLastDay?BUS_FROM_TIBURTINA:searchTrains(CONFIG.destination)};
+const routes=(dow:number,isLastDay:boolean)=>({go:dow===1?BUS_TO_TIBURTINA:searchTrains(CONFIG.origin),back:isLastDay?BUS_FROM_TIBURTINA:searchTrains(CONFIG.destination)});
 // lunedi (YYYY-MM-DD) della settimana di una data
 const weekOf=(d:string)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()-((x.getUTCDay()+6)%7));return x.toISOString().slice(0,10)};
-// per ogni settimana, l'ultimo giorno in cui il gruppo ha un evento (extra compresi)
-const lastDays=(g:Group)=>{const m=new Map<string,string>();for(const l of g.lessons){const k=weekOf(l.date);if(!m.has(k)||l.date>m.get(k)!)m.set(k,l.date)}return m};
-function plan(all:Lesson[],groups:Group[]):DayPlan[]{
+// per ogni settimana, il primo / l'ultimo giorno in cui il gruppo ha un evento (extra compresi)
+const edgeDays=(g:Group,last:boolean)=>{const m=new Map<string,string>();for(const l of g.lessons){const k=weekOf(l.date),c=m.get(k);if(!c||(last?l.date>c:l.date<c))m.set(k,l.date)}return m};
+type Day=DayPlan&{mid?:Train[]};
+// B (Teramo): bus linea 7 ogni giorno; treno Lanciano->Teramo prima del primo evento della settimana e Teramo->Lanciano dopo l'ultimo;
+// il mercoledi, se ci sono due eventi, bus per uscire dopo il primo e rientrare prima del secondo (mid).
+function planB(gl:Lesson[],dow:number,isFirst:boolean,isLast:boolean,m:number){
+  const outbound:Train[]=[],inbound:Train[]=[],mid:Train[]=[];
+  const first=gl[0],last=gl.reduce((a,b)=>b.end>a.end?b:a);
+  const bus=selectOutbound(TE_BUS_TO_UNI,first,m)[0];
+  if(bus){
+    outbound.push(bus);
+    if(isFirst){const t=selectOutbound(dow===0?LAN_TE_SUN:LAN_TE_WEEK,{...first,start:bus.departure},B_CONNECT_MINUTES)[0];if(t)outbound.push(t)}
+  }
+  const back=selectInbound(TE_BUS_FROM_UNI,last,m)[0];
+  if(back){
+    inbound.push(back);
+    if(isLast&&dow>=1&&dow<=5){const t=selectInbound(TE_LAN_WEEK,{...last,end:back.arrival},B_CONNECT_MINUTES)[0];if(t)inbound.push(t)}
+  }
+  if(dow===3&&gl.length>1){
+    const out=selectInbound(TE_BUS_FROM_UNI,gl[0],m)[0];
+    const ret=out&&selectOutbound(TE_BUS_TO_UNI.filter(t=>toMinutes(t.departure)>=toMinutes(out.arrival)),gl[1],m)[0];
+    if(out&&ret)mid.push(out,ret);
+  }
+  return {outbound,inbound,mid};
+}
+function plan(all:Lesson[],groups:Group[]):Day[]{
   const dates=[...new Set(all.map(l=>l.date))].sort();
-  const lasts=new Map(groups.map(g=>[g.src,lastDays(g)] as const));
+  const lasts=new Map(groups.map(g=>[g.src,edgeDays(g,true)] as const)),firsts=new Map(groups.map(g=>[g.src,edgeDays(g,false)] as const));
   return dates.map(date=>{
     const dow=new Date(date+'T12:00:00').getDay();
     const lessons=all.filter(l=>l.date===date).sort((a,b)=>a.start.localeCompare(b.start));
-    const outbound:Train[]=[],inbound:Train[]=[];
+    const outbound:Train[]=[],inbound:Train[]=[],mid:Train[]=[];
     for(const g of groups){
       if(!g.transport)continue;
       const gl=g.lessons.filter(l=>l.date===date).sort((a,b)=>a.start.localeCompare(b.start));
       if(!gl.length)continue;
       const last=gl.reduce((a,b)=>b.end>a.end?b:a);
-      const r=routes(g.src,dow,lasts.get(g.src)!.get(weekOf(date))===date);
-      outbound.push(...(fixedOutbound(g.src,dow)??selectOutbound(r.go,gl[0],g.margin)).map(t=>({...t,src:g.src})));
-      inbound.push(...selectInbound(r.back,last,g.margin).map(t=>({...t,src:g.src})));
+      const isLast=lasts.get(g.src)!.get(weekOf(date))===date,isFirst=firsts.get(g.src)!.get(weekOf(date))===date;
+      if(g.src==='B'){
+        const b=planB(gl,dow,isFirst,isLast,g.margin);
+        outbound.push(...b.outbound.map(t=>({...t,src:g.src})));inbound.push(...b.inbound.map(t=>({...t,src:g.src})));mid.push(...b.mid.map(t=>({...t,src:g.src})));
+        continue;
+      }
+      const r=routes(dow,isLast);
+      outbound.push(...(fixedOutbound(g.src,dow)??selectOutbound(r.go,gl[0],g.margin)).slice(0,1).map(t=>({...t,src:g.src})));
+      inbound.push(...selectInbound(r.back,last,g.margin).slice(0,1).map(t=>({...t,src:g.src})));
     }
-    return {date,lessons,outbound,inbound};
+    return {date,lessons,outbound,inbound,mid};
   });
 }
 async function main(){
