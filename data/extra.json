@@ -1,6 +1,10 @@
 [
   {"date":"2026-11-12","start":"14:00","end":"16:00","title":"Esempio: seminario ospite","room":"Aula Magna","timetable":"all"},
   {"date":"2026-11-24","start":"10:30","end":"12:30","title":"Dalla scheda al parlamento","room":"","timetable":"B"},
+  {"date":"2026-11-23","start":"10:00","end":"12:00","title":"L'economia del bene comune","room":"Aula Acquario","timetable":"A"},
   {"date":"2026-11-25","start":"15:30","end":"18:30","title":"La tutela penale e civile delle persone vulenrabili","room":"Sala delle lauree","timetable":"B"},
+  {"date":"2026-12-01","start":"12:00","end":"13:30","title":"Le politiche per la transizione energetica in un contesto globale conflittuale e polarizzato","room":"13","timetable":"A"},
   {"date":"2026-11-21","start":"09:30","end":"14:00","title":"Plenaria Fast Charge","room":"Aula 38 SPV","timetable":"A"}
+
+ 
 ]
